@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OTP Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .otp-card {
+      margin: 15px 0;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .otp-code {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      margin: 10px 0;
+    }
+    .otp-timer {
+      color: #888;
+    }
+    button {
+      margin-top: 10px;
+    }
+    #video {
+      max-width: 100%;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+    }
+    #controls {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>OTP Generator</h1>
+  <div id="controls">
+    <input type="file" id="fileInput" accept=".json">
+    <button onclick="startScan()">Scan QR Code</button>
+  </div>
+  <video id="video" autoplay></video>
+  <div id="results"></div>
+
+  <script>
+    let accounts = [];
+    let timerIntervalId = null;
+    let videoElement = document.getElementById('video');
+    let resultsDiv = document.getElementById('results');
+
+    // 从 JSON 文件加载 OTP
+    document.getElementById('fileInput').addEventListener('change', async function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const newAccounts = JSON.parse(text);
+        accounts = [...accounts, ...newAccounts];
+        updateOTPs();
+      } catch (err) {
+        console.error('Invalid JSON file:', err);
+        alert('Invalid JSON file');
+      }
+    });
+
+    // 开始二维码扫描
+    async function startScan() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        videoElement.srcObject = stream;
+        await videoElement.play();
+
+        const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        let scanning = true;
+
+        const scanLoop = async () => {
+          if (!scanning) return;
+          const barcode = await barcodeDetector.detect(videoElement);
+          if (barcode.length > 0) {
+            const otpUri = barcode[0].rawValue;
+            const parsed = parseOtpAuthUri(otpUri);
+            if (parsed) {
+              accounts.push(parsed);
+              updateOTPs();
+              scanning = false;
+              stream.getTracks().forEach(track => track.stop());
+              videoElement.srcObject = null;
+              alert('QR Code scanned successfully!');
+            }
+          }
+          requestAnimationFrame(scanLoop);
+        };
+        scanLoop();
+      } catch (err) {
+        console.error('Error accessing camera or detecting QR code:', err);
+        alert('Failed to access camera or detect QR code');
+      }
+    }
+
+    // 解析 OTP URI
+    function parseOtpAuthUri(uri) {
+      if (!uri.startsWith('otpauth://totp/')) return null;
+
+      try {
+        const url = new URL(uri);
+        const pathParts = url.pathname.split(':');
+        const nameWithIssuer = decodeURIComponent(pathParts[1] || '');
+        const issuerMatch = nameWithIssuer.match(/(.*)$$(.*)/);
+        let issuer = '';
+        let name = nameWithIssuer;
+
+        if (issuerMatch) {
+          issuer = decodeURIComponent(issuerMatch[1]);
+          name = decodeURIComponent(issuerMatch[2]);
+        }
+
+        const secret = url.searchParams.get('secret');
+        if (!secret) return null;
+
+        return {
+          name,
+          secret,
+          issuer
+        };
+      } catch (err) {
+        return null;
+      }
+    }
+
+    // 更新 OTP 显示
+    async function updateOTPs() {
+      if (timerIntervalId) {
+        clearInterval(timerIntervalId);
+        timerIntervalId = null;
+      }
+
+      resultsDiv.innerHTML = '';
+      let remaining = 0;
+
+      try {
+        const time = Math.floor(Date.now() / 1000);
+        remaining = 30 - (time % 30);
+
+        for (const account of accounts) {
+          try {
+            const otp = await generateOTP(account.secret);
+            createOTPCard(account.name, account.issuer, otp, resultsDiv, remaining);
+          } catch (err) {
+            console.error(`Error generating OTP for ${account.name}:`, err);
+            createOTPCard(account.name, account.issuer, 'ERROR', resultsDiv, remaining);
+          }
+        }
+      } catch (err) {
+        console.error('Error generating OTPs:', err);
+      }
+
+      if (remaining > 0) {
+        const timerDisplayElements = document.querySelectorAll('.otp-timer');
+        let currentRemaining = remaining;
+        timerIntervalId = setInterval(() => {
+          currentRemaining--;
+          timerDisplayElements.forEach(el => {
+            el.textContent = `Remaining: ${currentRemaining}s`;
+          });
+          if (currentRemaining <= 0) {
+            clearInterval(timerIntervalId);
+            timerIntervalId = null;
+            updateOTPs();
+          }
+        }, 1000);
+      }
+    }
+
+    // 生成 OTP（与之前相同）
+    async function generateOTP(secretBase32) {
+      const keyBytes = base32ToUint8Array(secretBase32);
+
+      const time = Math.floor(Date.now() / 1000);
+      const timeCounter = Math.floor(time / 30);
+      const timeBytes = convertTo8Bytes(timeCounter);
+
+      const key = await crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'HMAC', hash: 'SHA-1' },
+        false,
+        ['sign']
+      );
+
+      const hmacBuffer = await crypto.subtle.sign(
+        { name: 'HMAC', hash: 'SHA-1' },
+        key,
+        timeBytes
+      );
+
+      const hmacBytes = new Uint8Array(hmacBuffer);
+      const offset = hmacBytes[19] & 0x0F;
+      const binary =
+        ((hmacBytes[offset] & 0x7F) << 24) |
+        ((hmacBytes[offset + 1] & 0xFF) << 16) |
+        ((hmacBytes[offset + 2] & 0xFF) << 8) |
+        (hmacBytes[offset + 3] & 0xFF);
+
+      return String(binary % 1000000).padStart(6, '0');
+    }
+
+    // Base32 解码
+    function base32ToUint8Array(base32String) {
+      return new Uint8Array(base32ToBytes(base32String));
+    }
+
+    function base32ToBytes(base32) {
+      const G = {
+        chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+        fromWords: function (words) {
+          let i = 0;
+          let l = words.length;
+          let bytes = [];
+          while (i < l) {
+            bytes.push((words[i] >>> 24) & 0xFF);
+            bytes.push((words[i] >>> 16) & 0xFF);
+            bytes.push((words[i] >>> 8) & 0xFF);
+            bytes.push(words[i] & 0xFF);
+            i++;
+          }
+          return bytes;
+        },
+        toWords: function (bytes) {
+          let i = 0;
+          let l = bytes.length;
+          let words = [];
+          while (i < l) {
+            words.push(
+              ((bytes[i] & 0xFF) << 24) |
+              ((bytes[++i] & 0xFF) << 16) |
+              ((bytes[++i] & 0xFF) << 8) |
+              (bytes[++i] & 0xFF)
+            );
+            i++;
+          }
+          return words;
+        }
+      };
+
+      base32 = base32.replace(/=/g, '').toUpperCase();
+      let chars = G.chars;
+      let l = base32.length;
+      let i = 0;
+      let bits = 0;
+      let value = 0;
+      let words = [];
+
+      while (i < l) {
+        let c = base32.charAt(i);
+        let v = chars.indexOf(c);
+        if (v === -1) throw new Error("Invalid character: " + c);
+        value = (value << 5) | v;
+        bits += 5;
+        if (bits >= 32) {
+          words.push(value);
+          bits -= 32;
+          value = bits ? (value >> bits) : 0;
+        }
+        i++;
+      }
+
+      if (bits) {
+        value = value << (32 - bits) & 0xFFFFFFFF;
+      }
+
+      return G.fromWords(words);
+    }
+
+    function convertTo8Bytes(timeCounter) {
+      const buffer = new ArrayBuffer(8);
+      const dataView = new DataView(buffer);
+      dataView.setBigUint64(0, BigInt(timeCounter), false); // Big-endian
+      return new Uint8Array(buffer);
+    }
+
+    function createOTPCard(name, issuer, code, parent, remaining) {
+      const card = document.createElement('div');
+      card.className = 'otp-card';
+      card.innerHTML = `
+        <div><strong>${name}</strong></div>
+        <div style="color:#666;">Issuer: ${issuer}</div>
+        <div class="otp-code">${code}</div>
+        <div class="otp-timer">Remaining: ${remaining}s</div>
+        <button onclick="this.parentElement.remove()">Remove</button>
+      `;
+      parent.appendChild(card);
+    }
+  </script>
+</body>
+</html>
