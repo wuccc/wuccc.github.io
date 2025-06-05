@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP账户生成器 - 二维码扫描</title>
+    <link rel="stylesheet" href="all.min.css">
+    <script src="jsQR.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        :root {
+            --primary: #0f4c75;
+            --secondary: #3282b8;
+            --accent: #00b7c2;
+            --accent-light: #5de5ed;
+            --dark: #1b262c;
+            --darker: #0d1a21;
+            --light: #bbe1fa;
+            --card-bg: rgba(31, 41, 55, 0.8);
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #f87171;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--darker), var(--dark));
+            color: var(--light);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .container {
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin: 20px 0 30px;
+            padding: 0 20px;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            background: linear-gradient(to right, var(--accent), var(--accent-light));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        header p {
+            font-size: 1.1rem;
+            color: var(--light);
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        
+        /* 主网格布局 - 桌面和iPad横屏 */
+        .app-container {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr) 400px;
+            gap: 25px;
+            margin-top: 20px;
+        }
+        
+        /* iPad竖屏布局调整 */
+        @media (max-width: 1024px) {
+            .app-container {
+                grid-template-columns: 250px minmax(0, 1fr) 350px;
+                gap: 15px;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+            
+            .otp-code {
+                font-size: 1.5rem;
+            }
+            
+            .btn {
+                padding: 8px 12px;
+                font-size: 0.85rem;
+            }
+        }
+        
+        /* 手机竖屏布局 */
+        @media (max-width: 768px) {
+            .app-container {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "left"
+                    "right"
+                    "center";
+            }
+            
+            .account-management {
+                grid-area: left;
+            }
+            
+            .otp-display-section {
+                grid-area: right;
+            }
+            
+            .account-list-section {
+                grid-area: center;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card-title {
+            display: flex;
+            align-items: center;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: var(--accent);
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card-title i {
+            margin-right: 10px;
+            background: var(--primary);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--accent-light);
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: var(--light);
+            font-size: 0.95rem;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.9rem;
+        }
+        
+        .btn-primary {
+            background: var(--secondary);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--light);
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+        
+        .otp-display {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 15px 0;
+        }
+        
+        .otp-code {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--accent-light);
+            font-family: monospace;
+        }
+        
+        .otp-time {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--light);
+            font-size: 0.9rem;
+        }
+        
+        .progress-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+        
+        .account-list {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        
+        .account-item {
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+        
+        .account-item:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .account-item.active {
+            background: rgba(0, 183, 194, 0.1);
+            border-color: var(--accent);
+        }
+        
+        .account-item .name {
+            font-weight: 600;
+            color: var(--light);
+        }
+        
+        .account-item .issuer {
+            font-size: 0.85rem;
+            color: var(--light);
+            opacity: 0.7;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .file-input-label {
+            display: block;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .file-input-label:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+        
+        .file-input {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .json-preview {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+        
+        .copied-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--success);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .copied-message.show {
+            opacity: 1;
+        }
+        
+        .scanner-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            display: none;
+        }
+        
+        .scanner-video {
+            width: 80%;
+            max-width: 500px;
+            border: 3px solid var(--accent);
+            border-radius: 8px;
+        }
+        
+        .scanner-canvas {
+            display: none;
+        }
+        
+        .scanner-controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        
+        .scanner-message {
+            margin-top: 15px;
+            color: white;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-qrcode"></i> OTP账户生成器</h1>
+            <p>通过二维码扫描或JSON文件导入账户信息，生成安全的一次性密码</p>
+        </header>
+        
+        <div class="app-container">
+            <div class="account-management card">
+                <h2 class="card-title"><i class="fas fa-file-import"></i> 账户导入</h2>
+                
+                <div class="btn-group">
+                    <button id="scanQRBtn" class="btn btn-primary">
+                        <i class="fas fa-camera"></i> 扫描二维码
+                    </button>
+                    <button id="importJsonBtn" class="btn btn-secondary">
+                        <i class="fas fa-file-code"></i> 导入JSON
+                    </button>
+                </div>
+                
+                <div class="input-group" id="jsonImportSection" style="display: none;">
+                    <label>选择JSON文件：</label>
+                    <div class="file-input-container">
+                        <label class="file-input-label">
+                            <i class="fas fa-file-upload"></i> 选择文件
+                            <input type="file" id="jsonFileInput" class="file-input" accept=".*">
+                        </label>
+                    </div>
+                    
+                    <label>JSON格式示例：</label>
+                    <div class="json-preview">[
+  {
+    "name": "账户名称",
+    "secret": "JBSWY3DPEHPK3PXP",
+    "issuer": "服务提供商"
+  },
+  ...
+]</div>
+                </div>
+                
+                <div class="btn-group">
+                    <button id="clearAccounts" class="btn btn-danger">
+                        <i class="fas fa-trash-alt"></i> 清除所有账户
+                    </button>
+                </div>
+            </div>
+            
+            <div class="account-list-section card">
+                <div class="card-title">
+                    <i class="fas fa-users"></i> 账户列表
+                    <span id="accountCount" style="margin-left: auto; font-size: 0.9rem;">0 个账户</span>
+                </div>
+                
+                <div id="accountList" class="account-list">
+                    <div class="empty-state">
+                        <i class="fas fa-user-clock"></i>
+                        <h3>没有账户信息</h3>
+                        <p>扫描二维码或导入JSON文件以加载账户</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="otp-display-section card">
+                <h2 class="card-title"><i class="fas fa-lock"></i> OTP生成</h2>
+                
+                <div class="input-group">
+                    <label for="currentAccount">当前账户</label>
+                    <input type="text" id="currentAccount" readonly placeholder="未选择账户">
+                </div>
+                
+                <div class="input-group">
+                    <label for="otpType">OTP类型</label>
+                    <select id="otpType">
+                        <option value="totp">基于时间 (TOTP)</option>
+                        <option value="hotp">基于计数器 (HOTP)</option>
+                    </select>
+                </div>
+                
+                <div class="otp-display">
+                    <div class="otp-code" id="otpCode">------</div>
+                    <button id="copyOTP" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <div class="otp-time" id="timeInfo">
+                    <i class="fas fa-clock"></i>
+                    <span>剩余时间: <span id="timeRemaining">30秒</span></span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress" id="otpProgress"></div>
+                </div>
+                
+                <div class="btn-group">
+                    <button id="generateOTP" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> 生成OTP
+                    </button>
+                    <button id="resetCounter" class="btn btn-secondary">
+                        <i class="fas fa-undo"></i> 重置计数器
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="copied-message" id="copiedMessage">
+        <i class="fas fa-check-circle"></i> 已复制到剪贴板！
+    </div>
+
+    <div class="scanner-container" id="scannerContainer">
+        <video class="scanner-video" id="scannerVideo" playsinline></video>
+        <canvas class="scanner-canvas" id="scannerCanvas"></canvas>
+        <div class="scanner-message" id="scannerMessage">正在扫描二维码...</div>
+        <div class="scanner-controls">
+            <button id="cancelScanBtn" class="btn btn-danger">
+                <i class="fas fa-times"></i> 取消
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 页面元素
+        const scanQRBtn = document.getElementById('scanQRBtn');
+        const importJsonBtn = document.getElementById('importJsonBtn');
+        const jsonImportSection = document.getElementById('jsonImportSection');
+        const jsonFileInput = document.getElementById('jsonFileInput');
+        const accountList = document.getElementById('accountList');
+        const accountCount = document.getElementById('accountCount');
+        const currentAccount = document.getElementById('currentAccount');
+        const otpType = document.getElementById('otpType');
+        const otpCode = document.getElementById('otpCode');
+        const timeInfo = document.getElementById('timeInfo');
+        const timeRemaining = document.getElementById('timeRemaining');
+        const otpProgress = document.getElementById('otpProgress');
+        const generateOTPBtn = document.getElementById('generateOTP');
+        const copyOTPBtn = document.getElementById('copyOTP');
+        const resetCounterBtn = document.getElementById('resetCounter');
+        const clearAccountsBtn = document.getElementById('clearAccounts');
+        const copiedMessage = document.getElementById('copiedMessage');
+        
+        // 二维码扫描相关元素
+        const scannerContainer = document.getElementById('scannerContainer');
+        const scannerVideo = document.getElementById('scannerVideo');
+        const scannerCanvas = document.getElementById('scannerCanvas');
+        const scannerMessage = document.getElementById('scannerMessage');
+        const cancelScanBtn = document.getElementById('cancelScanBtn');
+        
+        // 状态变量
+        let accounts = [];
+        let counter = 0;
+        let timer;
+        let selectedAccount = null;
+        let scannerStream = null;
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAccountsFromStorage();
+            updateAccountList();
+            startTOTPTimer();
+            
+            // 设置按钮事件
+            scanQRBtn.addEventListener('click', startQRScanner);
+            importJsonBtn.addEventListener('click', () => {
+                jsonImportSection.style.display = 'block';
+            });
+            cancelScanBtn.addEventListener('click', stopQRScanner);
+        });
+        
+        // 从localStorage加载账户
+        function loadAccountsFromStorage() {
+            const storedAccounts = localStorage.getItem('otpAccounts');
+            if (storedAccounts) {
+                try {
+                    accounts = JSON.parse(storedAccounts);
+                } catch (e) {
+                    console.error('解析账户数据失败', e);
+                    accounts = [];
+                }
+            }
+        }
+        
+        // 保存账户到localStorage
+        function saveAccountsToStorage() {
+            localStorage.setItem('otpAccounts', JSON.stringify(accounts));
+        }
+        
+        // 更新账户列表显示
+        function updateAccountList() {
+            accountCount.textContent = `${accounts.length} 个账户`;
+            
+            if (accounts.length === 0) {
+                accountList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-clock"></i>
+                        <h3>没有账户信息</h3>
+                        <p>扫描二维码或导入JSON文件以加载账户</p>
+                    </div>
+                `;
+                currentAccount.value = "";
+                otpCode.textContent = "------";
+                selectedAccount = null;
+                return;
+            }
+            
+            accountList.innerHTML = '';
+            accounts.forEach((account, index) => {
+                const accountItem = document.createElement('div');
+                accountItem.className = `account-item ${selectedAccount === index ? 'active' : ''}`;
+                accountItem.innerHTML = `
+                    <div class="name">${account.name}</div>
+                    <div class="issuer">${account.issuer || '未指定发行者'}</div>
+                `;
+                accountItem.addEventListener('click', () => selectAccount(index));
+                accountList.appendChild(accountItem);
+            });
+        }
+        
+        // 选择账户
+        function selectAccount(index) {
+            selectedAccount = index;
+            const account = accounts[index];
+            currentAccount.value = account.name + (account.issuer ? ` (${account.issuer})` : '');
+            updateAccountList();
+            generateOTP();
+        }
+        
+        // Base32解码函数
+        function base32Decode(base32) {
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+            base32 = base32.replace(/=+$/, '').toUpperCase();
+            
+            let bits = 0;
+            let value = 0;
+            let output = [];
+            
+            for (let i = 0; i < base32.length; i++) {
+                const char = base32.charAt(i);
+                const index = alphabet.indexOf(char);
+                
+                if (index === -1) {
+                    throw new Error('Invalid base32 character: ' + char);
+                }
+                
+                value = (value << 5) | index;
+                bits += 5;
+                
+                if (bits >= 8) {
+                    bits -= 8;
+                    output.push((value >>> bits) & 0xff);
+                }
+            }
+            
+            return new Uint8Array(output);
+        }
+        
+        // HMAC-SHA1计算函数
+        async function hmacSha1(key, message) {
+            // 使用Web Crypto API计算HMAC-SHA1
+            const cryptoKey = await window.crypto.subtle.importKey(
+                'raw',
+                key,
+                {
+                    name: 'HMAC',
+                    hash: { name: 'SHA-1' }
+                },
+                false,
+                ['sign']
+            );
+            
+            const signature = await window.crypto.subtle.sign(
+                'HMAC',
+                cryptoKey,
+                message
+            );
+            
+            return new Uint8Array(signature);
+        }
+        
+        // 生成TOTP
+        async function generateTOTP(secret, digits = 6) {
+            try {
+                // 解码Base32密钥
+                const key = base32Decode(secret);
+                
+                // 计算时间步长
+                const timeStep = 30;
+                const timestamp = Math.floor(Date.now() / 1000);
+                const counter = Math.floor(timestamp / timeStep);
+                
+                // 将计数器转换为8字节大端序
+                const buffer = new ArrayBuffer(8);
+                const view = new DataView(buffer);
+                view.setUint32(4, counter);
+                
+                // 计算HMAC-SHA1
+                const hmac = await hmacSha1(key, buffer);
+                
+                // 动态截取
+                const offset = hmac[hmac.length - 1] & 0x0f;
+                const binary = (
+                    ((hmac[offset] & 0x7f) << 24) |
+                    ((hmac[offset + 1] & 0xff) << 16) |
+                    ((hmac[offset + 2] & 0xff) << 8) |
+                    (hmac[offset + 3] & 0xff)
+                );
+                
+                // 生成OTP
+                const otp = binary % Math.pow(10, digits);
+                return otp.toString().padStart(digits, '0');
+            } catch (error) {
+                console.error('生成TOTP失败:', error);
+                return '------';
+            }
+        }
+        
+        // 生成HOTP
+        async function generateHOTP(secret, counter, digits = 6) {
+            try {
+                // 解码Base32密钥
+                const key = base32Decode(secret);
+                
+                // 将计数器转换为8字节大端序
+                const buffer = new ArrayBuffer(8);
+                const view = new DataView(buffer);
+                view.setUint32(4, counter);
+                
+                // 计算HMAC-SHA1
+                const hmac = await hmacSha1(key, buffer);
+                
+                // 动态截取
+                const offset = hmac[hmac.length - 1] & 0x0f;
+                const binary = (
+                    ((hmac[offset] & 0x7f) << 24) |
+                    ((hmac[offset + 1] & 0xff) << 16) |
+                    ((hmac[offset + 2] & 0xff) << 8) |
+                    (hmac[offset + 3] & 0xff)
+                );
+                
+                // 生成OTP
+                const otp = binary % Math.pow(10, digits);
+                return otp.toString().padStart(digits, '0');
+            } catch (error) {
+                console.error('生成HOTP失败:', error);
+                return '------';
+            }
+        }
+        
+        // 生成OTP
+        async function generateOTP() {
+            if (selectedAccount === null) {
+                otpCode.textContent = "------";
+                return;
+            }
+            
+            const account = accounts[selectedAccount];
+            const digits = 6; // 固定6位
+            
+            if (otpType.value === 'totp') {
+                const code = await generateTOTP(account.secret, digits);
+                otpCode.textContent = code;
+            } else {
+                const code = await generateHOTP(account.secret, counter, digits);
+                otpCode.textContent = code;
+            }
+        }
+        
+        // 启动TOTP计时器
+        function startTOTPTimer() {
+            clearInterval(timer);
+            
+            function updateTimer() {
+                const now = new Date();
+                const seconds = now.getSeconds();
+                const remaining = 30 - (seconds % 30);
+                
+                timeRemaining.textContent = `${remaining}秒`;
+                const progressPercent = (remaining / 30) * 100;
+                otpProgress.style.width = `${progressPercent}%`;
+                
+                if (remaining === 30 && otpType.value === 'totp') {
+                    generateOTP();
+                }
+            }
+            
+            updateTimer();
+            timer = setInterval(updateTimer, 1000);
+        }
+        
+        // 复制到剪贴板函数
+        function copyToClipboard(text) {
+            if (!text || text === '------') return;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                copiedMessage.classList.add('show');
+                setTimeout(() => {
+                    copiedMessage.classList.remove('show');
+                }, 2000);
+            });
+        }
+        
+        // 启动二维码扫描
+        async function startQRScanner() {
+            scannerContainer.style.display = 'flex';
+            scannerMessage.textContent = '正在扫描二维码...';
+            
+            try {
+                scannerStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                scannerVideo.srcObject = scannerStream;
+                scannerVideo.play();
+                
+                // 开始扫描
+                scanQRCode();
+            } catch (error) {
+                scannerMessage.textContent = '无法访问摄像头: ' + error.message;
+                console.error('摄像头访问错误:', error);
+            }
+        }
+        
+        // 停止二维码扫描
+        function stopQRScanner() {
+            if (scannerStream) {
+                scannerStream.getTracks().forEach(track => track.stop());
+                scannerStream = null;
+            }
+            scannerContainer.style.display = 'none';
+            scannerVideo.srcObject = null;
+        }
+        
+        // 扫描二维码
+        function scanQRCode() {
+            const canvas = scannerCanvas;
+            const video = scannerVideo;
+            const context = canvas.getContext('2d');
+            
+            function tick() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+                    
+                    if (code) {
+                        try {
+                            // 解析OTP URI格式: otpauth://totp/账户名?secret=密钥&issuer=发行者
+                            const url = new URL(code.data);
+                            if (url.protocol === 'otpauth:' && url.hostname === 'totp') {
+                                const pathParts = url.pathname.split('/');
+                                const name = decodeURIComponent(pathParts[pathParts.length - 1]);
+                                const secret = url.searchParams.get('secret');
+                                const issuer = url.searchParams.get('issuer');
+                                
+                                if (name && secret) {
+                                    // 添加到账户列表
+                                    accounts.push({
+                                        name: name,
+                                        secret: secret,
+                                        issuer: issuer || ''
+                                    });
+                                    
+                                    saveAccountsToStorage();
+                                    updateAccountList();
+                                    stopQRScanner();
+                                    
+                                    // 自动选择新添加的账户
+                                    selectAccount(accounts.length - 1);
+                                    return;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('解析二维码数据失败:', e);
+                        }
+                        
+                        scannerMessage.textContent = '不支持的二维码格式';
+                        setTimeout(stopQRScanner, 2000);
+                        return;
+                    }
+                }
+                
+                requestAnimationFrame(tick);
+            }
+            
+            tick();
+        }
+        
+        // 事件监听器
+        jsonFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const jsonData = JSON.parse(event.target.result);
+                    
+                    if (!Array.isArray(jsonData)) {
+                        throw new Error('JSON文件应该包含一个数组');
+                    }
+                    
+                    jsonData.forEach(account => {
+                        if (account.name && account.secret) {
+                            accounts.push({
+                                name: account.name,
+                                secret: account.secret,
+                                issuer: account.issuer || ''
+                            });
+                        }
+                    });
+                    
+                    saveAccountsToStorage();
+                    updateAccountList();
+                    
+                    if (accounts.length > 0) {
+                        selectAccount(0);
+                    }
+                    
+                    jsonFileInput.value = '';
+                    jsonImportSection.style.display = 'none';
+                    
+                } catch (error) {
+                    alert(`导入失败: ${error.message}`);
+                    console.error('JSON解析错误', error);
+                }
+            };
+            
+            reader.readAsText(file);
+        });
+        
+        generateOTPBtn.addEventListener('click', generateOTP);
+        copyOTPBtn.addEventListener('click', () => copyToClipboard(otpCode.textContent));
+        
+        resetCounterBtn.addEventListener('click', () => {
+            counter = 0;
+            if (otpType.value === 'hotp') {
+                generateOTP();
+            }
+        });
+        
+        clearAccountsBtn.addEventListener('click', () => {
+            if (confirm('确定要清除所有账户信息吗？此操作不可撤销。')) {
+                accounts = [];
+                saveAccountsToStorage();
+                updateAccountList();
+            }
+        });
+        
+        otpType.addEventListener('change', () => {
+            if (otpType.value === 'totp') {
+                timeInfo.style.display = 'flex';
+                startTOTPTimer();
+            } else {
+                timeInfo.style.display = 'none';
+                clearInterval(timer);
+            }
+            generateOTP();
+        });
+    </script>
+</body>
+</html>
